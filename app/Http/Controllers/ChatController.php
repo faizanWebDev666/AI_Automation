@@ -7,23 +7,14 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class ChatController extends Controller
 {
-    /**
-     * Show the chat page.
-     */
     public function index()
     {
-        return view('chat', [
-            'authUser' => Auth::user(),
-        ]);
+        return view('chat', ['authUser' => Auth::user()]);
     }
 
-    /**
-     * Return all users except current, with last message preview and unread count.
-     */
     public function contacts()
     {
         $me = Auth::id();
@@ -41,32 +32,29 @@ class ChatController extends Controller
                 ->where('is_read', false)
                 ->count();
 
+            $preview = $lastMessage
+                ? ($lastMessage->type === 'image' ? '📷 Photo' : $lastMessage->message)
+                : null;
+
             return [
                 'id'           => $user->id,
                 'name'         => $user->name,
                 'email'        => $user->email,
-                'last_message' => $lastMessage?->message,
+                'last_message' => $preview,
                 'last_time'    => $lastMessage?->created_at?->toDateTimeString(),
                 'unread'       => $unread,
             ];
         });
 
-        // Sort by last message time (most recent first), users with no messages at the end
-        $sorted = $contacts->sortByDesc(function ($c) {
-            return $c['last_time'] ?? '0000-00-00';
-        })->values();
+        $sorted = $contacts->sortByDesc(fn($c) => $c['last_time'] ?? '0000-00-00')->values();
 
         return response()->json($sorted);
     }
 
-    /**
-     * Return messages between auth user and a specific user.
-     */
     public function messages(User $user)
     {
         $me = Auth::id();
 
-        // Mark incoming messages as read
         Message::where('sender_id', $user->id)
             ->where('receiver_id', $me)
             ->where('is_read', false)
@@ -84,6 +72,8 @@ class ChatController extends Controller
                 'sender_id'   => $m->sender_id,
                 'receiver_id' => $m->receiver_id,
                 'message'     => $m->message,
+                'type'        => $m->type ?? 'text',
+                'file_url'    => $m->file_path ? asset('storage/' . $m->file_path) : null,
                 'is_read'     => $m->is_read,
                 'timestamp'   => $m->created_at->toDateTimeString(),
             ];
@@ -91,7 +81,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Send a message to another user.
+     * Send a text message.
      */
     public function send(Request $request)
     {
@@ -104,6 +94,7 @@ class ChatController extends Controller
             'sender_id'   => Auth::id(),
             'receiver_id' => $request->receiver_id,
             'message'     => $request->message,
+            'type'        => 'text',
         ]);
 
         broadcast(new PrivateMessageSent($msg, Auth::user()->name))->toOthers();
@@ -113,6 +104,41 @@ class ChatController extends Controller
             'sender_id'   => $msg->sender_id,
             'receiver_id' => $msg->receiver_id,
             'message'     => $msg->message,
+            'type'        => 'text',
+            'file_url'    => null,
+            'timestamp'   => $msg->created_at->toDateTimeString(),
+        ]);
+    }
+
+    /**
+     * Send an image message.
+     */
+    public function sendImage(Request $request)
+    {
+        $request->validate([
+            'receiver_id' => 'required|exists:users,id',
+            'image'       => 'required|image|mimes:jpg,jpeg,png,gif,webp|max:5120',
+        ]);
+
+        $path = $request->file('image')->store('chat-images', 'public');
+
+        $msg = Message::create([
+            'sender_id'   => Auth::id(),
+            'receiver_id' => $request->receiver_id,
+            'message'     => '📷 Photo',
+            'type'        => 'image',
+            'file_path'   => $path,
+        ]);
+
+        broadcast(new PrivateMessageSent($msg, Auth::user()->name))->toOthers();
+
+        return response()->json([
+            'id'          => $msg->id,
+            'sender_id'   => $msg->sender_id,
+            'receiver_id' => $msg->receiver_id,
+            'message'     => $msg->message,
+            'type'        => 'image',
+            'file_url'    => asset('storage/' . $path),
             'timestamp'   => $msg->created_at->toDateTimeString(),
         ]);
     }

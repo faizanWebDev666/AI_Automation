@@ -18,6 +18,8 @@ class PrivateMessageSent implements ShouldBroadcastNow
     public string $sender_name;
     public int $receiver_id;
     public string $message;
+    public string $type;
+    public ?string $file_url;
     public string $timestamp;
 
     public function __construct(Message $msg, string $senderName)
@@ -27,12 +29,11 @@ class PrivateMessageSent implements ShouldBroadcastNow
         $this->sender_name = $senderName;
         $this->receiver_id = $msg->receiver_id;
         $this->message = $msg->message;
+        $this->type = $msg->type ?? 'text';
+        $this->file_url = $msg->file_path ? asset('storage/' . $msg->file_path) : null;
         $this->timestamp = $msg->created_at->toDateTimeString();
     }
 
-    /**
-     * Broadcast on the receiver's private channel.
-     */
     public function broadcastOn(): PrivateChannel
     {
         return new PrivateChannel('chat.' . $this->receiver_id);

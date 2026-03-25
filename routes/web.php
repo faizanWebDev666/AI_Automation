@@ -28,4 +28,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/chat/contacts', [ChatController::class, 'contacts']);
     Route::get('/chat/messages/{user}', [ChatController::class, 'messages']);
     Route::post('/chat/send', [ChatController::class, 'send']);
+    Route::post('/chat/send-image', [ChatController::class, 'sendImage']);
 });
