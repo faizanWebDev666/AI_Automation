@@ -9,7 +9,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class PrivateMessageSent implements ShouldBroadcastNow
+class PrivateMessageEdited implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -20,33 +20,31 @@ class PrivateMessageSent implements ShouldBroadcastNow
     public string $message;
     public string $type;
     public ?string $file_url;
-    public ?int $reply_to_message_id;
-    public ?string $reply_to_message;
-    public ?int $forwarded_from_message_id;
+    public ?string $edited_at;
     public string $timestamp;
 
-    public function __construct(Message $msg, string $senderName)
+    public function __construct(Message $msg)
     {
         $this->id = $msg->id;
         $this->sender_id = $msg->sender_id;
-        $this->sender_name = $senderName;
+        $this->sender_name = $msg->sender?->name ?? '';
         $this->receiver_id = $msg->receiver_id;
         $this->message = $msg->message;
         $this->type = $msg->type ?? 'text';
         $this->file_url = $msg->file_path ? asset('storage/' . $msg->file_path) : null;
+        $this->edited_at = $msg->edited_at?->toDateTimeString();
         $this->timestamp = $msg->created_at->toDateTimeString();
-        $this->reply_to_message_id = $msg->reply_to_message_id;
-        $this->reply_to_message = $msg->reply_to_message;
-        $this->forwarded_from_message_id = $msg->forwarded_from_message_id;
     }
 
     public function broadcastOn(): PrivateChannel
     {
+        // Notify the other party only.
         return new PrivateChannel('chat.' . $this->receiver_id);
     }
 
     public function broadcastAs(): string
     {
-        return 'message.sent';
+        return 'message.edited';
     }
 }
+

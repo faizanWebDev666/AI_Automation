@@ -29,4 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/chat/messages/{user}', [ChatController::class, 'messages']);
     Route::post('/chat/send', [ChatController::class, 'send']);
     Route::post('/chat/send-image', [ChatController::class, 'sendImage']);
+    Route::post('/chat/message/edit', [ChatController::class, 'edit']);
+    Route::delete('/chat/message/{message}', [ChatController::class, 'delete']);
+    Route::post('/chat/message/forward', [ChatController::class, 'forward']);
 });
