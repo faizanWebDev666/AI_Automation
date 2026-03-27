@@ -48,6 +48,18 @@
             font-family: 'Inter', sans-serif; color: #fff; cursor: pointer; transition: all 0.3s; margin-top: 6px;
         }
         .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.3); }
+        .role-selector { display: flex; gap: 12px; margin-bottom: 18px; }
+        .role-option { flex: 1; }
+        .role-option input[type="radio"] { display: none; }
+        .role-option label {
+            display: block; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+            background: #f8fafc; cursor: pointer; text-align: center; font-weight: 500;
+            transition: all 0.3s; margin: 0;
+        }
+        .role-option input[type="radio"]:checked + label {
+            border-color: #6366f1; background: #eef2ff; color: #6366f1;
+        }
+        .role-option label:hover { border-color: #cbd5e1; }
         .auth-footer { margin-top: 20px; font-size: 13px; color: #94a3b8; }
         .auth-footer a { color: #6366f1; text-decoration: none; font-weight: 500; }
         .auth-footer a:hover { text-decoration: underline; }
@@ -80,6 +92,22 @@
                 <label>Confirm Password</label>
                 <input type="password" name="password_confirmation" placeholder="Repeat your password" required>
             </div>
+
+            <div class="form-group">
+                <label style="margin-bottom: 12px;">Account Type</label>
+                <div class="role-selector">
+                    <div class="role-option">
+                        <input type="radio" id="role_user" name="role" value="user" {{ old('role') === 'user' || !old('role') ? 'checked' : '' }}>
+                        <label for="role_user">👤 User</label>
+                    </div>
+                    <div class="role-option">
+                        <input type="radio" id="role_dealer" name="role" value="dealer" {{ old('role') === 'dealer' ? 'checked' : '' }}>
+                        <label for="role_dealer">🏪 Dealer</label>
+                    </div>
+                </div>
+                @error('role') <div class="error-text">{{ $message }}</div> @enderror
+            </div>
+
             <button type="submit" class="btn-submit">Create Account</button>
         </form>
 
