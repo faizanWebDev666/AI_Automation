@@ -12,16 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->enum('role', ['user', 'dealer'])->default('user')->after('email');
+            $table->enum('role', ['user', 'dealer', 'admin'])->default('user')->after('email');
             $table->string('google2fa_secret')->nullable()->after('role');
             $table->boolean('google2fa_enabled')->default(false)->after('google2fa_secret');
             $table->text('google2fa_recovery_codes')->nullable()->after('google2fa_enabled');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {

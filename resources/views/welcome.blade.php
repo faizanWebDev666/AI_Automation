@@ -71,6 +71,23 @@
             font-weight: 400;
         }
 
+        .main-nav {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .main-nav a {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+            margin: 0 12px;
+            transition: color 0.3s;
+        }
+
+        .main-nav a:hover {
+            color: #ec4899;
+        }
+
         /* Card */
         .form-card {
             background: #ffffff;
@@ -388,6 +405,12 @@
             <div class="badge">⚡ AI-Powered</div>
             <h1>Add New Product</h1>
             <p>Enter a product title and let AI auto-fill the details for you</p>
+        </div>
+
+        <div class="main-nav">
+            <a href="{{ route('pricing') }}">Pricing</a>
+            <a href="{{ route('login') }}">Login</a>
+            <a href="{{ route('register') }}">Register</a>
         </div>
 
         <!-- Form Card -->

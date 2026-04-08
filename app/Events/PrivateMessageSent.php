@@ -17,6 +17,8 @@ class PrivateMessageSent implements ShouldBroadcastNow
     public int $sender_id;
     public string $sender_name;
     public int $receiver_id;
+    public ?int $property_id;
+    public ?array $property_context;
     public string $message;
     public string $type;
     public ?string $file_url;
@@ -25,12 +27,14 @@ class PrivateMessageSent implements ShouldBroadcastNow
     public ?int $forwarded_from_message_id;
     public string $timestamp;
 
-    public function __construct(Message $msg, string $senderName)
+    public function __construct(Message $msg, string $senderName, ?array $propertyContext = null)
     {
         $this->id = $msg->id;
         $this->sender_id = $msg->sender_id;
         $this->sender_name = $senderName;
         $this->receiver_id = $msg->receiver_id;
+        $this->property_id = $msg->property_id;
+        $this->property_context = $propertyContext;
         $this->message = $msg->message;
         $this->type = $msg->type ?? 'text';
         $this->file_url = $msg->file_path ? asset('storage/' . $msg->file_path) : null;

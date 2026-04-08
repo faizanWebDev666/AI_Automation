@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -20,7 +21,21 @@ class AuthController extends Controller
     {
         $request->validate([
             'name'     => 'required|string|max:50',
-            'email'    => 'required|email|unique:users,email',
+            'email'    => [
+                'required',
+                'email',
+                'unique:users,email',
+                // Check if email is banned from verification
+                function ($attribute, $value, $fail) {
+                    $bannedUser = User::where('email', $value)
+                        ->where('verification_banned', true)
+                        ->first();
+                    
+                    if ($bannedUser) {
+                        $fail("The email address $value is banned from registration due to failed verification attempts. Please contact support.");
+                    }
+                },
+            ],
             'password' => 'required|string|min:6|confirmed',
             'role'     => 'required|in:user,dealer',
         ]);
@@ -36,6 +51,21 @@ class AuthController extends Controller
         $user->sendEmailVerificationNotification();
 
         Auth::login($user);
+
+        // Auto-assign Free plan to dealers on registration
+        if ($request->role === 'dealer') {
+            $freePlan = Plan::where('slug', 'free')->first();
+            if ($freePlan) {
+                $user->subscriptions()->create([
+                    'plan_id' => $freePlan->id,
+                    'status' => 'active',
+                    'billing_cycle' => 'monthly',
+                    'starts_at' => now(),
+                    'month_reset_at' => now()->addMonth(),
+                ]);
+                $user->update(['subscription_status' => 'active']);
+            }
+        }
 
         return redirect('/email-verify')->with('message', 'Please verify your email address to continue.');
     }
@@ -74,13 +104,14 @@ class AuthController extends Controller
         }
 
         if ($user->hasVerifiedEmail()) {
-            return redirect($user->role === 'dealer' ? '/dealer-dashboard' : '/chat')->with('message', 'Email already verified.');
+            $redirectTo = $user->role === 'admin' ? '/admin/dashboard' : ($user->role === 'dealer' ? '/dealer-dashboard' : '/home');
+            return redirect($redirectTo)->with('message', 'Email already verified.');
         }
 
         $user->markEmailAsVerified();
 
-        // Redirect to dealer dashboard if user is a dealer, else to chat
-        $redirectTo = $user->role === 'dealer' ? '/dealer-dashboard' : '/chat';
+        // Redirect to appropriate dashboard based on user role
+        $redirectTo = $user->role === 'admin' ? '/admin/dashboard' : ($user->role === 'dealer' ? '/dealer-dashboard' : '/home');
         return redirect($redirectTo)->with('message', 'Email verified successfully!');
     }
 
@@ -101,6 +132,11 @@ class AuthController extends Controller
             $request->session()->regenerate();
             
             $user = Auth::user();
+
+            if ($user->role === 'admin') {
+                return redirect()->intended('/admin/dashboard');
+            }
+
             if (!$user->email_verified_at) {
                 Auth::logout();
                 return redirect('/email-verify')->with('message', 'Please verify your email to login.');
@@ -126,15 +162,19 @@ class AuthController extends Controller
     private function getDashboardRoute(): string
     {
         if (!Auth::check()) {
-            return '/chat';
+            return '/home';
         }
 
         $user = Auth::user();
         
+        if ($user->role === 'admin') {
+            return '/admin/dashboard';
+        }
+
         if ($user->role === 'dealer') {
             return '/dealer-dashboard';
         }
 
-        return '/chat';
+        return '/home';
     }
 }

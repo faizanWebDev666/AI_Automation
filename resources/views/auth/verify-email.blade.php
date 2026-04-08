@@ -10,12 +10,33 @@
         body {
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
-            background: #f0f2f5;
+    background: url('https://images.unsplash.com/photo-1560185127-6ed189bf02f4') no-repeat center center/cover;
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
         }
+        
+/* Blur overlay */
+body::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.3); /* dark overlay for better readability */
+    
+    z-index: 0;
+}
+
+/* Make content appear above blur */
+body > * {
+    position: relative;
+    z-index: 1;
+}
         .verify-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -64,7 +85,9 @@
 </head>
 <body>
     <div class="verify-card">
-        <div class="icon">✉️</div>
+        <div class="icon">
+            <img src="images/logo.png" alt="Logo">
+        </div>
         <h1>Verify Your Email</h1>
         <p class="subtitle">
             A verification link has been sent to<br>

@@ -380,6 +380,72 @@
         .conv-header .conv-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
         .conv-header .conv-status { font-size: 12px; color: var(--text-secondary); }
 
+        /* Property Context Bar */
+        .property-context-bar {
+            background: var(--bg-content);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .property-thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid var(--border-color);
+        }
+
+        .property-info {
+            flex: 1;
+        }
+
+        .property-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .property-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .property-price {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--accent-primary);
+        }
+
+        .btn-close-context {
+            background: var(--bg-light);
+            border: none;
+            color: var(--text-tertiary);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-close-context:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
         /* Messages */
         .messages-container {
             flex: 1;
@@ -1094,6 +1160,13 @@
         </div>
         <div class="user-info">
             <span class="user-name">{{ Auth::user()->name }}</span>
+            @if(Auth::user()->role === 'dealer')
+                <a href="{{ route('dealer.dashboard') }}" class="btn-logout" style="text-decoration:none; background:rgba(99,102,241,0.1); color:var(--accent-primary); margin-right:10px;">Dashboard</a>
+            @elseif(Auth::user()->role === 'admin')
+                <a href="{{ route('admin.dashboard') }}" class="btn-logout" style="text-decoration:none; background:rgba(99,102,241,0.1); color:var(--accent-primary); margin-right:10px;">Dashboard</a>
+            @else
+                <a href="{{ route('home') }}" class="btn-logout" style="text-decoration:none; background:rgba(99,102,241,0.1); color:var(--accent-primary); margin-right:10px;">Home</a>
+            @endif
             <form method="POST" action="/logout" style="margin:0">
                 @csrf
                 <button type="submit" class="btn-logout" title="Logout">Logout</button>
@@ -1130,6 +1203,27 @@
                         <div class="conv-status">Online</div>
                     </div>
                 </div>
+
+                @if($property)
+                <div class="property-context-bar" id="property-context">
+                    <img src="{{ $property->images->first() ? asset('storage/' . $property->images->first()->image_path) : 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' }}" class="property-thumb" alt="Property">
+                    <div class="property-info">
+                        <div class="property-title">{{ $property->title }}</div>
+                        <div class="property-meta">
+                            ID: #{{ str_pad($property->id, 6, '0', STR_PAD_LEFT) }} • 
+                            <span style="color: var(--text-primary); font-weight: 700;">{{ $property->area_name }}, {{ $property->city }}</span> • 
+                            <span class="property-price">Rs {{ number_format($property->price) }}</span>
+                        </div>
+                        <div class="property-meta" style="margin-top: 2px; font-size: 11px; opacity: 0.8;">
+                            {{ ucfirst($property->property_type) }} • 
+                            @if($property->bedrooms){{ $property->bedrooms }} Bed • @endif
+                            @if($property->bathrooms){{ $property->bathrooms }} Bath • @endif
+                            {{ $property->area_marla }} Marla
+                        </div>
+                    </div>
+                    <button class="btn-close-context" onclick="document.getElementById('property-context').remove()" title="Dismiss context">✕</button>
+                </div>
+                @endif
 
                 <div class="messages-container" id="messages-container"></div>
 
@@ -1242,6 +1336,8 @@
     <script>
         const CSRF = document.querySelector('meta[name="csrf-token"]').content;
         const ME = @json(Auth::user()->only('id', 'name'));
+        const TARGET_USER_ID = {{ $targetUserId ?? 'null' }};
+        const PROPERTY_CONTEXT = @json($propertyContext);
         const EchoClass = window.Echo.default || window.Echo;
 
         let echo = null;
@@ -1253,8 +1349,27 @@
         let forwardMessageId = null;
 
         // Init
-        loadContacts();
+        initChat();
         connectWebSocket();
+
+        async function initChat() {
+              await loadContacts();
+              if (TARGET_USER_ID) {
+                  const target = contactsData.find(c => c.id === TARGET_USER_ID);
+                  if (target) {
+                      await openConversation(TARGET_USER_ID);
+                      
+                      if (PROPERTY_CONTEXT) {
+                         showPropertyContext(PROPERTY_CONTEXT); // Show bar immediately for user
+                         const input = document.getElementById('msg-input');
+                         input.value = `Hi, I'm interested in "${PROPERTY_CONTEXT.title}" (ID: #${String(PROPERTY_CONTEXT.id).padStart(6, '0')}). \n\n📍 Location: ${PROPERTY_CONTEXT.location}\n🏠 Type: ${PROPERTY_CONTEXT.type}\n📐 Specs: ${PROPERTY_CONTEXT.specs}\n💰 Price: Rs ${PROPERTY_CONTEXT.price}\n\nLink: ${PROPERTY_CONTEXT.url}`;
+                         input.focus();
+                      }
+                  } else {
+                      console.log('Target user not found in contacts');
+                  }
+              }
+          }
 
         // Enable Pusher debug logging only if broadcasting is enabled
         if ('{{ env("BROADCAST_CONNECTION", "null") }}' !== 'null') {
@@ -1359,6 +1474,9 @@
                     console.log('[Echo] 📩 Message received:', data);
                     if (data.sender_id === selectedUserId) {
                         appendMsg(data);
+                        if (data.property_context) {
+                            showPropertyContext(data.property_context);
+                        }
                         scrollBottom();
                     }
                     loadContacts();
@@ -1395,6 +1513,7 @@
                 const res = await fetch('/chat/contacts');
                 contactsData = await res.json();
                 renderContacts(contactsData);
+                return contactsData;
             } catch (err) {
                 console.error('Failed to load contacts:', err);
             }
@@ -1453,7 +1572,8 @@
 
             try {
                 const res = await fetch('/chat/messages/' + userId);
-                const msgs = await res.json();
+                const data = await res.json();
+                const msgs = data.messages || [];
                 container.innerHTML = '';
 
                 if (msgs.length === 0) {
@@ -1461,6 +1581,19 @@
                 } else {
                     msgs.forEach(m => appendMsg(m));
                 }
+
+                // Show property context if provided in the conversation history
+                if (data.latest_property_context) {
+                    showPropertyContext(data.latest_property_context);
+                } else if (userId === TARGET_USER_ID && PROPERTY_CONTEXT) {
+                    // Show context bar if it was explicitly requested for this user (even if no messages yet)
+                    showPropertyContext(PROPERTY_CONTEXT);
+                } else {
+                    // Remove context bar if no messages have context and it wasn't the target user
+                    const existing = document.getElementById('property-context');
+                    if (existing) existing.remove();
+                }
+
                 scrollBottom();
             } catch (err) {
                 container.innerHTML = '<div style="text-align:center;color:#dc2626;padding:20px;">Failed to load messages.</div>';
@@ -1471,6 +1604,35 @@
             document.getElementById('msg-input').focus();
         }
 
+        function showPropertyContext(prop) {
+            const wrapper = document.getElementById('conv-wrapper');
+            let contextBar = document.getElementById('property-context');
+            
+            if (!contextBar) {
+                contextBar = document.createElement('div');
+                contextBar.id = 'property-context';
+                contextBar.className = 'property-context-bar';
+                const header = wrapper.querySelector('.conv-header');
+                header.after(contextBar);
+            }
+            
+            contextBar.innerHTML = `
+                <img src="${prop.image}" class="property-thumb" alt="Property">
+                <div class="property-info">
+                    <div class="property-title">${prop.title}</div>
+                    <div class="property-meta">
+                        ID: # ${String(prop.id).padStart(6, '0')} • 
+                        <span style="color: var(--text-primary); font-weight: 700;">${prop.location}</span> • 
+                        <span class="property-price">Rs ${prop.price}</span>
+                    </div>
+                    <div class="property-meta" style="margin-top: 2px; font-size: 11px; opacity: 0.8;">
+                        ${prop.type} • ${prop.specs}
+                    </div>
+                </div>
+                <button class="btn-close-context" onclick="document.getElementById('property-context').remove()" title="Dismiss context">✕</button>
+            `;
+        }
+
         // ---- Send ----
         async function sendMessage() {
             const input = document.getElementById('msg-input');
@@ -1479,12 +1641,14 @@
 
             const tempKey = 'tmp_' + Date.now() + '_' + Math.random().toString(16).slice(2);
             const replyToMessageId = replyContext?.messageId ? Number(replyContext.messageId) : null;
+            const propertyId = (PROPERTY_CONTEXT && selectedUserId === TARGET_USER_ID) ? PROPERTY_CONTEXT.id : null;
 
             // Show instantly (optimistic UI)
             appendMsg({
                 id: null,
                 sender_id: ME.id,
                 receiver_id: selectedUserId,
+                property_id: propertyId,
                 message: text,
                 type: 'text',
                 file_url: null,
@@ -1494,6 +1658,11 @@
                 forwarded_from_message_id: null,
                 edited_at: null,
             }, tempKey);
+            
+            if (propertyId && PROPERTY_CONTEXT && selectedUserId === TARGET_USER_ID) {
+                showPropertyContext(PROPERTY_CONTEXT);
+            }
+            
             scrollBottom();
 
             try {
@@ -1512,6 +1681,7 @@
                         receiver_id: selectedUserId,
                         message: text,
                         reply_to_message_id: replyToMessageId,
+                        property_id: propertyId
                     }),
                 });
 

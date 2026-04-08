@@ -13,9 +13,27 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('chat', ['authUser' => Auth::user()]);
+        $property = null;
+        if ($request->has('property')) {
+            $property = \App\Models\Property::with('images')->find($request->property);
+        }
+
+        return view('chat', [
+            'authUser' => Auth::user(),
+            'targetUserId' => $request->query('user'),
+            'property' => $property,
+            'propertyContext' => $property ? [
+                'id' => $property->id,
+                'title' => $property->title,
+                'price' => number_format($property->price),
+                'location' => "{$property->area_name}, {$property->city}",
+                'type' => ucfirst($property->property_type),
+                'specs' => ($property->bedrooms ? "{$property->bedrooms} Bed " : '') . ($property->bathrooms ? "• {$property->bathrooms} Bath " : '') . "• {$property->area_marla} Marla",
+                'url' => route('properties.show', $property->id)
+            ] : null
+        ]);
     }
 
     public function contacts()
@@ -69,23 +87,45 @@ class ChatController extends Controller
             $q->where('sender_id', $user->id)->where('receiver_id', $me);
         })->orderBy('created_at')->get();
 
-        return response()->json($messages->map(function ($m) {
-            $editedAt = $m->edited_at ? $m->edited_at->toDateTimeString() : null;
-            return [
-                'id'          => $m->id,
-                'sender_id'   => $m->sender_id,
-                'receiver_id' => $m->receiver_id,
-                'message'     => $m->message,
-                'type'        => $m->type ?? 'text',
-                'file_url'    => $m->file_path ? asset('storage/' . $m->file_path) : null,
-                'is_read'     => $m->is_read,
-                'timestamp'   => $m->created_at->toDateTimeString(),
-                'edited_at'   => $editedAt,
-                'reply_to_message_id' => $m->reply_to_message_id,
-                'reply_to_message'    => $m->reply_to_message,
-                'forwarded_from_message_id' => $m->forwarded_from_message_id,
-            ];
-        }));
+        $latestPropertyContext = null;
+        $latestPropertyMsg = $messages->whereNotNull('property_id')->last();
+        if ($latestPropertyMsg) {
+            $prop = \App\Models\Property::with('images')->find($latestPropertyMsg->property_id);
+            if ($prop) {
+                $latestPropertyContext = [
+                    'id' => $prop->id,
+                    'title' => $prop->title,
+                    'price' => number_format($prop->price),
+                    'location' => "{$prop->area_name}, {$prop->city}",
+                    'type' => ucfirst($prop->property_type),
+                    'specs' => ($prop->bedrooms ? "{$prop->bedrooms} Bed " : '') . ($prop->bathrooms ? "• {$prop->bathrooms} Bath " : '') . "• {$prop->area_marla} Marla",
+                    'url' => route('properties.show', $prop->id),
+                    'image' => $prop->images->first() ? asset('storage/' . $prop->images->first()->image_path) : 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80'
+                ];
+            }
+        }
+
+        return response()->json([
+            'messages' => $messages->map(function ($m) {
+                $editedAt = $m->edited_at ? $m->edited_at->toDateTimeString() : null;
+                return [
+                    'id'          => $m->id,
+                    'sender_id'   => $m->sender_id,
+                    'receiver_id' => $m->receiver_id,
+                    'property_id' => $m->property_id,
+                    'message'     => $m->message,
+                    'type'        => $m->type ?? 'text',
+                    'file_url'    => $m->file_path ? asset('storage/' . $m->file_path) : null,
+                    'is_read'     => $m->is_read,
+                    'timestamp'   => $m->created_at->toDateTimeString(),
+                    'edited_at'   => $editedAt,
+                    'reply_to_message_id' => $m->reply_to_message_id,
+                    'reply_to_message'    => $m->reply_to_message,
+                    'forwarded_from_message_id' => $m->forwarded_from_message_id,
+                ];
+            }),
+            'latest_property_context' => $latestPropertyContext
+        ]);
     }
 
     private function validateConversationMessagePair(int $meId, int $otherUserId, Message $msg): void
@@ -110,6 +150,7 @@ class ChatController extends Controller
             'receiver_id' => 'required|exists:users,id',
             'message'     => 'required|string|max:2000',
             'reply_to_message_id' => 'nullable|exists:messages,id',
+            'property_id' => 'nullable|exists:properties,id',
         ]);
 
         $meId = (int) Auth::id();
@@ -129,6 +170,7 @@ class ChatController extends Controller
         $msg = Message::create([
             'sender_id'   => $meId,
             'receiver_id' => $receiverId,
+            'property_id' => $request->property_id,
             'message'     => $request->message,
             'type'        => 'text',
             'reply_to_message_id' => $replyToMessageId,
@@ -136,7 +178,23 @@ class ChatController extends Controller
         ]);
 
         try {
-            broadcast(new PrivateMessageSent($msg, Auth::user()->name))->toOthers();
+            $context = null;
+            if ($msg->property_id) {
+                $prop = \App\Models\Property::with('images')->find($msg->property_id);
+                if ($prop) {
+                    $context = [
+                        'id' => $prop->id,
+                        'title' => $prop->title,
+                        'price' => number_format($prop->price),
+                        'location' => "{$prop->area_name}, {$prop->city}",
+                        'type' => ucfirst($prop->property_type),
+                        'specs' => ($prop->bedrooms ? "{$prop->bedrooms} Bed " : '') . ($prop->bathrooms ? "• {$prop->bathrooms} Bath " : '') . "• {$prop->area_marla} Marla",
+                        'url' => route('properties.show', $prop->id),
+                        'image' => $prop->images->first() ? asset('storage/' . $prop->images->first()->image_path) : 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80'
+                    ];
+                }
+            }
+            broadcast(new PrivateMessageSent($msg, Auth::user()->name, $context))->toOthers();
         } catch (\Exception $e) {
             // Broadcasting disabled or failed, continue anyway
             \Log::info('Broadcasting failed silently: ' . $e->getMessage());

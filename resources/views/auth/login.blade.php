@@ -10,12 +10,33 @@
         body {
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
-            background: #f0f2f5;
+            background: url('https://images.unsplash.com/photo-1560185127-6ed189bf02f4') no-repeat center center/cover;
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
         }
+body::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.3); /* dark overlay for better readability */
+    
+    z-index: 0;
+}
+
+/* Make content appear above blur */
+body > * {
+    position: relative;
+    z-index: 1;
+}
+
+
         .auth-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -56,11 +77,32 @@
         .auth-footer { margin-top: 20px; font-size: 13px; color: #94a3b8; }
         .auth-footer a { color: #6366f1; text-decoration: none; font-weight: 500; }
         .auth-footer a:hover { text-decoration: underline; }
+
+        .divider {
+            display: flex; align-items: center; text-align: center; margin: 24px 0;
+            color: #94a3b8; font-size: 12px; font-weight: 500;
+        }
+        .divider::before, .divider::after {
+            content: ''; flex: 1; border-bottom: 1px solid #e2e8f0;
+        }
+        .divider:not(:empty)::before { margin-right: 12px; }
+        .divider:not(:empty)::after { margin-left: 12px; }
+
+        .btn-google {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 12px; font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif;
+            color: #1e293b; cursor: pointer; transition: all 0.3s; text-decoration: none;
+        }
+        .btn-google:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .btn-google img { width: 18px; height: 18px; }
     </style>
 </head>
 <body>
     <div class="auth-card">
-        <div class="icon">👋</div>
+          <div class="icon">
+            <img src="images/logo.png" alt="Logo">
+        </div>
         <h1>Welcome Back</h1>
         <p class="subtitle">Log in to continue chatting</p>
 
@@ -82,6 +124,13 @@
             </div>
             <button type="submit" class="btn-submit">Log In</button>
         </form>
+
+        <div class="divider">OR</div>
+
+        <a href="{{ route('auth.google') }}" class="btn-google">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+            Continue with Google
+        </a>
 
         <div class="auth-footer">
             Don't have an account? <a href="/register">Sign up</a>

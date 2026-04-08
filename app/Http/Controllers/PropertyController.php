@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +13,15 @@ use Illuminate\Support\Facades\Log;
 class PropertyController extends Controller
 {
     /**
-     * List dealer's properties
+     * Show the property listing page (Blade)
+     */
+    public function indexPage()
+    {
+        return view('dealer.properties.index');
+    }
+
+    /**
+     * List dealer's properties (JSON for AJAX)
      */
     public function index()
     {
@@ -21,7 +30,45 @@ class PropertyController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return response()->json(['properties' => $properties]);
+        return response()->json(['success' => true, 'properties' => $properties]);
+    }
+
+    /**
+     * Show property details (Public Page)
+     */
+    public function show($id)
+    {
+        $property = Property::with(['images', 'user'])->findOrFail($id);
+
+        // Only show approved properties to public, but allow the owner to see it
+        if ($property->status !== 'approved' && (!Auth::check() || Auth::id() !== $property->user_id)) {
+            abort(404, 'Property not found or pending approval.');
+        }
+
+        return view('properties.show', compact('property'));
+    }
+
+    /**
+     * Show the create property form (Blade)
+     */
+    public function create()
+    {
+        $user = Auth::user();
+        if (!$user->isVerified()) {
+            return redirect()->route('dealer.dashboard')->with('error', 'You must be verified to list properties.');
+        }
+
+        // Check plan and listing limits
+        $currentPlan = $user->getCurrentPlan();
+        $remainingListings = $user->getRemainingListings();
+        $canAdd = $user->canAddListing();
+        $totalAllowed = $currentPlan ? $currentPlan->listings_per_month : 3;
+        $subscription = $user->getActiveSubscription();
+        $usedListings = $subscription ? $subscription->listed_this_month : 0;
+
+        return view('dealer.properties.create', compact(
+            'currentPlan', 'remainingListings', 'canAdd', 'totalAllowed', 'usedListings'
+        ));
     }
 
     /**
@@ -33,6 +80,20 @@ class PropertyController extends Controller
 
         if (!$user->isVerified()) {
             return response()->json(['error' => 'You must be verified to list properties.'], 403);
+        }
+
+        // ═══════ PLAN LISTING LIMIT CHECK ═══════
+        if (!$user->canAddListing()) {
+            $currentPlan = $user->getCurrentPlan();
+            $planName = $currentPlan ? $currentPlan->name : 'Free Plan';
+            $limit = $currentPlan ? ($currentPlan->listings_per_month ?? 'unlimited') : 3;
+
+            return response()->json([
+                'error' => "You've reached your {$planName} listing limit ({$limit} per month). Please upgrade your plan to add more listings.",
+                'limit_reached' => true,
+                'current_plan' => $planName,
+                'upgrade_url' => route('subscription.plans'),
+            ], 403);
         }
 
         $request->validate([
@@ -83,16 +144,19 @@ class PropertyController extends Controller
         }
 
         // Store documents
-        $storagePath = "public/properties/{$user->id}/" . time();
+        $timestamp = time();
+        $folderName = "properties/{$user->id}/{$timestamp}";
+        $storagePath = $folderName;
+        
         $electricityBillPath = null;
         $ownershipProofPath = null;
 
         if ($request->hasFile('electricity_bill')) {
-            $electricityBillPath = $request->file('electricity_bill')->store($storagePath, 'local');
+            $electricityBillPath = $request->file('electricity_bill')->store($storagePath, 'public');
         }
 
         if ($request->hasFile('ownership_proof')) {
-            $ownershipProofPath = $request->file('ownership_proof')->store($storagePath, 'local');
+            $ownershipProofPath = $request->file('ownership_proof')->store($storagePath, 'public');
         }
 
         // Create property
@@ -135,7 +199,7 @@ class PropertyController extends Controller
         $watermarkedLivePhoto = $this->addWatermark($livePhotoDecoded);
 
         $livePhotoPath = "{$storagePath}/live_photo.jpg";
-        Storage::disk('local')->put("public/properties/{$user->id}/" . time() . "/live_photo.jpg", $watermarkedLivePhoto);
+        Storage::disk('public')->put($livePhotoPath, $watermarkedLivePhoto);
 
         PropertyImage::create([
             'property_id' => $property->id,
@@ -160,8 +224,8 @@ class PropertyController extends Controller
                 // Watermark
                 $watermarked = $this->addWatermark($imageContent);
 
-                $imgPath = "public/properties/{$user->id}/" . time() . "/img_{$order}.jpg";
-                Storage::disk('local')->put($imgPath, $watermarked);
+                $imgPath = "{$storagePath}/img_{$order}.jpg";
+                Storage::disk('public')->put($imgPath, $watermarked);
 
                 PropertyImage::create([
                     'property_id' => $property->id,
@@ -184,6 +248,9 @@ class PropertyController extends Controller
                 'flags' => $flags,
             ]);
         }
+
+        // ═══════ INCREMENT LISTING COUNTER ═══════
+        $user->addListing();
 
         return response()->json([
             'success' => true,
